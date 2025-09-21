@@ -1,0 +1,6 @@
+pip install selenium
+pip install python-dotenv
+pip install requests
+pip install openai  
+pip install webdriver-manager
+
