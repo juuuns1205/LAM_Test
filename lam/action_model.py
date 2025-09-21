@@ -3,11 +3,25 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
+
+try:  # pragma: no cover - optional dependency handling
+    import torch
+except ImportError:  # pragma: no cover - fallback when torch is unavailable
+    torch = None  # type: ignore[assignment]
+
+try:  # pragma: no cover - optional dependency handling
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+except ImportError:  # pragma: no cover - fallback when transformers is unavailable
+    AutoModelForSeq2SeqLM = AutoTokenizer = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_ACTIONS = {"click", "input"}
+_MODEL_DIR = Path(__file__).resolve().parent.parent / "trained_action_model"
+_MODEL_CACHE: Tuple[AutoTokenizer, AutoModelForSeq2SeqLM, Any] | None = None
+_MAX_GENERATION_TOKENS = 256
 
 
 def get_actions(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -111,19 +125,55 @@ def _fallback_action(step_text: str) -> Dict[str, Any]:
 
 
 def run_local_model(prompt: str) -> str:
-    """Placeholder for invoking a local AI model to convert text into actions."""
+    """Run the fine-tuned model stored on disk to predict actions for a step."""
 
-    # TODO: 실제 로컬 모델 로직 (예: HuggingFace pipeline, PyTorch 모델 등)
-    return json.dumps(
-        [
-            {
-                "action": "click",
-                "selector": {"css": "div.placeholder", "xpath": None},
-                "value": None,
-                "timestamp": None,
-            }
-        ]
-    )
+    if not isinstance(prompt, str):
+        raise TypeError("prompt must be a string")
+
+    tokenizer, model, device = _load_or_initialise_model()
+    if torch is None:  # pragma: no cover - defensive check
+        raise RuntimeError("PyTorch is required to execute the local action model")
+    encoded_input = tokenizer(prompt.strip(), return_tensors="pt", truncation=True)
+    encoded_input = encoded_input.to(device)
+
+    with torch.no_grad():
+        generated_tokens = model.generate(
+            **encoded_input,
+            max_new_tokens=_MAX_GENERATION_TOKENS,
+            num_beams=2,
+            early_stopping=True,
+        )
+
+    decoded = tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
+    return decoded.strip()
+
+
+def _load_or_initialise_model() -> Tuple[AutoTokenizer, AutoModelForSeq2SeqLM, Any]:
+    """Load the fine-tuned seq2seq model once and cache it for reuse."""
+
+    global _MODEL_CACHE
+
+    if _MODEL_CACHE is not None:
+        return _MODEL_CACHE
+
+    if AutoTokenizer is None or AutoModelForSeq2SeqLM is None or torch is None:
+        raise ImportError(
+            "transformers and torch must be installed to use the local action model"
+        )
+
+    if not _MODEL_DIR.exists():
+        raise FileNotFoundError(
+            f"The trained model directory '{_MODEL_DIR}' does not exist. Run the training script first."
+        )
+
+    tokenizer = AutoTokenizer.from_pretrained(_MODEL_DIR)
+    model = AutoModelForSeq2SeqLM.from_pretrained(_MODEL_DIR)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+
+    _MODEL_CACHE = (tokenizer, model, device)
+    return _MODEL_CACHE
 
 
 if __name__ == "__main__":
