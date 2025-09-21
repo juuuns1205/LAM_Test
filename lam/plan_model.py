@@ -13,7 +13,8 @@ import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional
-
+from openai import OpenAI
+from typing import Optional
 from dotenv import load_dotenv
 
 try:  # pragma: no cover - defensive import guard
@@ -45,7 +46,7 @@ _SYSTEM_PROMPT = (
     "생성하는 도우미입니다. 반드시 JSON 포맷으로만 응답하고, 다음 예시와 같은 구조를 따르세요:\n"
     "{\n  \"plan\": [\n    {\"step\": \"첫 번째 단계 설명\"},\n    {\"step\": \"두 번째 단계 설명\"}\n  ]\n}\n"
     "각 단계는 간결하지만 실행 가능한 명령문으로 작성하세요. 최소한 하나의 단계를 포함하고, "
-    "사용자의 요청을 완료하기 위해 필요한 주요 과정을 모두 나열하세요."
+    "사용자의 요청을 완료하기 위해 필요한 주요 과정을 모두 나열하세요. 반드시 JSON 포맷으로 응답하세요."
 )
 
 
@@ -69,31 +70,23 @@ def _call_openai_for_plan(client: OpenAI, user_query: str, model: str = DEFAULT_
     """Call the OpenAI Responses API and return the raw JSON string provided by the model."""
 
     try:
-        response = client.responses.create(
-            model=model,
-            input=[
-                {
-                    "role": "system",
-                    "content": [
-                        {"type": "text", "text": _SYSTEM_PROMPT},
-                    ],
-                },
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_query},
-                    ],
-                },
-            ],
-            temperature=0.2,
-        )
+        response = client.chat.completions.create(
+    model=model,
+    messages=[
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": user_query},
+    ],
+    temperature=0.2,
+)
+
     except Exception as exc:  # pragma: no cover - network dependent
         raise PlanModelError("Failed to request plan from OpenAI API") from exc
 
     # The Responses API exposes the combined text via the `output_text` helper.
-    raw_output = getattr(response, "output_text", None)
+    raw_output = response.choices[0].message.content
     if not raw_output:
         raise PlanModelError("OpenAI API did not return any content for the plan request")
+
     return raw_output
 
 
