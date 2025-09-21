@@ -1,0 +1,164 @@
+[
+  {
+    "action": "click",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431394,
+    "value": null
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431656,
+    "value": "a"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431706,
+    "value": "as"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431791,
+    "value": "asd"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431871,
+    "value": "asda"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431936,
+    "value": "asdas"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458431981,
+    "value": "asdasd"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432055,
+    "value": "asdasda"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432118,
+    "value": "asdasdas"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432153,
+    "value": "asdasdasd"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432217,
+    "value": "asdasdasda"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432271,
+    "value": "asdasdasdas"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432323,
+    "value": "asdasdasdasd"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432383,
+    "value": "asdasdasdasda"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432456,
+    "value": "asdasdasdasdas"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432498,
+    "value": "asdasdasdasdasd"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432592,
+    "value": "asdasdasdasdasds"
+  },
+  {
+    "action": "input",
+    "selector": {
+      "css": "INPUT#query[name='query']",
+      "xpath": "//*[@id='query']"
+    },
+    "timestamp": 1758458432648,
+    "value": "asdasdasdasdasdsd"
+  }
+]
