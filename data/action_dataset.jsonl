@@ -1,0 +1,5 @@
+{"step": "로그인 페이지 열기", "actions": [{"action": "click", "selector": {"css": "a[href='/login']", "xpath": null}, "value": null, "timestamp": null}]}
+{"step": "아이디 입력", "actions": [{"action": "input", "selector": {"css": "input#username", "xpath": null}, "value": "test_user", "timestamp": null}]}
+{"step": "비밀번호 입력", "actions": [{"action": "input", "selector": {"css": "input#password", "xpath": null}, "value": "secure_password", "timestamp": null}]}
+{"step": "로그인 버튼 클릭", "actions": [{"action": "click", "selector": {"css": "button.login-button", "xpath": null}, "value": null, "timestamp": null}]}
+{"step": "공지사항 페이지로 이동", "actions": [{"action": "click", "selector": {"css": "nav a[href='/notices']", "xpath": null}, "value": null, "timestamp": null}]}
