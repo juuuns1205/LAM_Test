@@ -1,6 +1,5 @@
-pip install selenium
-pip install python-dotenv
-pip install requests
-pip install openai  
-pip install webdriver-manager
-
+selenium==4.23.1
+python-dotenv==1.0.1
+requests==2.32.3
+openai==1.43.0
+webdriver-manager==4.0.2
