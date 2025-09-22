@@ -1,6 +1,7 @@
 """Utility module to convert plan steps into executable Selenium actions."""
 from __future__ import annotations
 
+import copy
 import json
 import logging
 from pathlib import Path
@@ -16,12 +17,50 @@ try:  # pragma: no cover - optional dependency handling
 except ImportError:  # pragma: no cover - fallback when transformers is unavailable
     AutoModelForSeq2SeqLM = AutoTokenizer = None  # type: ignore[assignment]
 
+try:  # pragma: no cover - optional dependency handling
+    from jsonformer import Jsonformer
+except ImportError:  # pragma: no cover - fallback when jsonformer is unavailable
+    Jsonformer = None  # type: ignore[assignment]
+
 logger = logging.getLogger(__name__)
 
 _SUPPORTED_ACTIONS = {"click", "input"}
 _MODEL_DIR = Path(__file__).resolve().parent.parent / "trained_action_model"
 _MODEL_CACHE: Tuple[AutoTokenizer, AutoModelForSeq2SeqLM, Any] | None = None
-_MAX_GENERATION_TOKENS = 256
+
+_ACTION_OBJECT_SCHEMA: Dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "action": {"type": "string", "enum": sorted(_SUPPORTED_ACTIONS)},
+        "selector": {
+            "type": "object",
+            "properties": {
+                "css": {"type": ["string", "null"]},
+                "xpath": {"type": ["string", "null"]},
+            },
+            "additionalProperties": False,
+            "anyOf": [
+                {"required": ["css"]},
+                {"required": ["xpath"]},
+            ],
+        },
+        "value": {"type": ["string", "null"]},
+        "timestamp": {"type": ["number", "string", "null"]},
+    },
+    "required": ["action", "selector"],
+    "additionalProperties": False,
+}
+
+_JSONFORMER_SCHEMA: Dict[str, Any] = {
+    "anyOf": [
+        copy.deepcopy(_ACTION_OBJECT_SCHEMA),
+        {
+            "type": "array",
+            "items": copy.deepcopy(_ACTION_OBJECT_SCHEMA),
+            "minItems": 1,
+        },
+    ]
+}
 
 
 def get_actions(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -56,10 +95,12 @@ def _convert_step_to_actions(step_text: str) -> List[Dict[str, Any]]:
 
     try:
         model_output = run_local_model(step_text)
-        if not model_output:
+        if model_output is None or (
+            isinstance(model_output, (list, dict)) and not model_output
+        ):
             raise ValueError("Model did not return any output")
 
-        parsed_output = json.loads(model_output)
+        parsed_output = model_output
     except Exception as exc:  # pragma: no cover - defensive error handling
         logger.exception("Falling back to heuristic action for step %r due to model error", step_text)
         return [_fallback_action(step_text)]
@@ -124,28 +165,46 @@ def _fallback_action(step_text: str) -> Dict[str, Any]:
     }
 
 
-def run_local_model(prompt: str) -> str:
+def run_local_model(prompt: str) -> Dict[str, Any] | List[Dict[str, Any]]:
     """Run the fine-tuned model stored on disk to predict actions for a step."""
 
     if not isinstance(prompt, str):
         raise TypeError("prompt must be a string")
 
-    tokenizer, model, device = _load_or_initialise_model()
+    prompt = prompt.strip()
+    if not prompt:
+        raise ValueError("prompt must not be empty")
+
+    if Jsonformer is None:
+        raise ImportError("jsonformer must be installed to use structured generation")
+
     if torch is None:  # pragma: no cover - defensive check
         raise RuntimeError("PyTorch is required to execute the local action model")
-    encoded_input = tokenizer(prompt.strip(), return_tensors="pt", truncation=True)
-    encoded_input = encoded_input.to(device)
 
-    with torch.no_grad():
-        generated_tokens = model.generate(
-            **encoded_input,
-            max_new_tokens=_MAX_GENERATION_TOKENS,
-            num_beams=2,
-            early_stopping=True,
-        )
+    tokenizer, model, _ = _load_or_initialise_model()
 
-    decoded = tokenizer.decode(generated_tokens[0], skip_special_tokens=True)
-    return decoded.strip()
+    schema = copy.deepcopy(_JSONFORMER_SCHEMA)
+    generator = Jsonformer(
+        model=model,
+        tokenizer=tokenizer,
+        schema=schema,
+        prompt=prompt,
+    )
+
+    result = generator()
+    if result is None:
+        raise ValueError("Model did not return any output")
+
+    if isinstance(result, str):
+        try:
+            result = json.loads(result)
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive safety net
+            raise ValueError("Model returned a string that is not valid JSON") from exc
+
+    if not isinstance(result, (dict, list)):
+        raise ValueError("Model output must be a dictionary or a list of dictionaries")
+
+    return result
 
 
 def _load_or_initialise_model() -> Tuple[AutoTokenizer, AutoModelForSeq2SeqLM, Any]:
