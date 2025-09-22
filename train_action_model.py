@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any, List
 
+import math
+
 from datasets import load_dataset
 from transformers import (
     AutoModelForSeq2SeqLM,
@@ -58,19 +60,30 @@ def main() -> None:
         remove_columns=raw_datasets["train"].column_names,
     )
 
+    train_example_count = len(tokenized_dataset)
+    if train_example_count == 0:
+        raise ValueError("The training dataset is empty; add at least one example.")
+
+    per_device_batch_size = max(1, min(4, train_example_count))
+    num_train_epochs = 5 if train_example_count < 20 else 30
+    steps_per_epoch = max(1, math.ceil(train_example_count / per_device_batch_size))
+    logging_steps = max(1, steps_per_epoch)
+
+    print(f"Training on {train_example_count} examples for {num_train_epochs} epoch(s) with batch size {per_device_batch_size}.")
+
     model = AutoModelForSeq2SeqLM.from_pretrained(MODEL_NAME)
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
 
     training_args = TrainingArguments(
         output_dir=str(OUTPUT_DIR),
-        num_train_epochs=30,
-        per_device_train_batch_size=4,
+        num_train_epochs=num_train_epochs,
+        per_device_train_batch_size=per_device_batch_size,
         learning_rate=5e-4,
         weight_decay=0.0,
         logging_strategy="steps",
-        logging_steps=1,
+        logging_steps=logging_steps,
         save_strategy="no",
-        report_to=[]
+        report_to=[],
     )
 
     trainer = Trainer(

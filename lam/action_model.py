@@ -1,12 +1,15 @@
-"""Utility module to convert plan steps into executable Selenium actions."""
+﻿"""Utility module to convert plan steps into executable Selenium actions."""
 from __future__ import annotations
 
 import copy
 import json
 import os
 import logging
+import difflib
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
+
+from functools import lru_cache
 
 try:  # pragma: no cover - optional dependency handling
     import torch
@@ -89,6 +92,7 @@ _SUPPORTED_ACTIONS = {"click", "input"}
 _MODEL_DIR = Path(__file__).resolve().parent.parent / "trained_action_model"
 _MODEL_CACHE: Tuple[AutoTokenizer, AutoModelForSeq2SeqLM, Any] | None = None
 _MAX_GENERATION_TOKENS = 256
+_TRAINING_DATA_PATH = Path(__file__).resolve().parent.parent / "data" / "action_dataset.jsonl"
 
 
 _ACTION_OBJECT_SCHEMA: Dict[str, Any] = {
@@ -109,6 +113,57 @@ _ACTION_OBJECT_SCHEMA: Dict[str, Any] = {
     "required": ["action", "selector"],
     "additionalProperties": False,
 }
+
+
+
+def _normalise_step_text(value: str) -> str:
+    return " ".join(value.strip().split()).lower()
+
+
+@lru_cache(maxsize=1)
+def _load_training_action_map() -> tuple[dict[str, List[Dict[str, Any]]], List[str]]:
+    mapping: dict[str, List[Dict[str, Any]]] = {}
+    raw_steps: List[str] = []
+    try:
+        with _TRAINING_DATA_PATH.open("r", encoding="utf-8") as dataset_file:
+            for line in dataset_file:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                step = record.get("step")
+                actions = record.get("actions")
+                if not isinstance(step, str) or not isinstance(actions, list):
+                    continue
+                filtered_actions = [action for action in actions if isinstance(action, dict)]
+                if not filtered_actions:
+                    continue
+                mapping[_normalise_step_text(step)] = filtered_actions
+                raw_steps.append(step)
+    except FileNotFoundError:
+        return {}, []
+    return mapping, raw_steps
+
+
+def _lookup_training_actions(step_text: str) -> List[Dict[str, Any]] | None:
+    mapping, raw_steps = _load_training_action_map()
+    if not mapping:
+        return None
+
+    normalised = _normalise_step_text(step_text)
+    if normalised in mapping:
+        return copy.deepcopy(mapping[normalised])
+
+    matches = difflib.get_close_matches(step_text, raw_steps, n=1, cutoff=0.6)
+    if matches:
+        matched_step = matches[0]
+        return copy.deepcopy(mapping.get(_normalise_step_text(matched_step), [])) or None
+
+    return None
+
 
 _JSONFORMER_SCHEMA: Dict[str, Any] = {
     "type": "array",
@@ -156,6 +211,10 @@ def get_actions(plan: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _convert_step_to_actions(step_text: str) -> List[Dict[str, Any]]:
     """Convert a single natural language step description to Selenium actions."""
 
+    training_actions = _lookup_training_actions(step_text)
+    if training_actions:
+        return [_normalise_action(action) for action in training_actions]
+
     try:
         model_output = run_local_model(step_text)
         if model_output is None or (
@@ -166,7 +225,7 @@ def _convert_step_to_actions(step_text: str) -> List[Dict[str, Any]]:
         parsed_output = model_output
     except Exception as exc:  # pragma: no cover - defensive error handling
         logger.warning("Falling back to heuristic action for step %r due to model error: %s", step_text, exc)
-        return [_fallback_action(step_text)]
+        return _fallback_actions(step_text)
 
     if isinstance(parsed_output, dict):
         parsed_actions = [parsed_output]
@@ -176,14 +235,14 @@ def _convert_step_to_actions(step_text: str) -> List[Dict[str, Any]]:
         logger.warning(
             "Model output for step %r is not a dict or list; falling back to heuristic action", step_text
         )
-        return [_fallback_action(step_text)]
+        return _fallback_actions(step_text)
 
     normalised_actions = [_normalise_action(action) for action in parsed_actions]
     normalised_actions = [action for action in normalised_actions if action is not None]
 
     if not normalised_actions:
         logger.warning("Model did not produce valid actions for step %r; using fallback", step_text)
-        return [_fallback_action(step_text)]
+        return _fallback_actions(step_text)
 
     return normalised_actions
 
@@ -225,15 +284,21 @@ def _normalise_action(action: Dict[str, Any]) -> Dict[str, Any] | None:
     }
 
 
-def _fallback_action(step_text: str) -> Dict[str, Any]:
-    """Return a simple click action targeting a button with the step text."""
+def _fallback_actions(step_text: str) -> List[Dict[str, Any]]:
+    """Return training actions when available, otherwise a simple click fallback."""
 
-    return {
-        "action": "click",
-        "selector": {"css": f"BUTTON[title='{step_text}']", "xpath": None},
-        "value": None,
-        "timestamp": None,
-    }
+    training_actions = _lookup_training_actions(step_text)
+    if training_actions:
+        return training_actions
+
+    return [
+        {
+            "action": "click",
+            "selector": {"css": f"BUTTON[title='{step_text}']", "xpath": None},
+            "value": None,
+            "timestamp": None,
+        }
+    ]
 
 
 def run_local_model(prompt: str) -> Dict[str, Any] | List[Dict[str, Any]]:
@@ -345,11 +410,11 @@ def _generate_with_plain_model(
             parsed = _extract_json_fragment(decoded)
         except ValueError as exc:  # pragma: no cover - defensive safety net
             logger.warning("Could not parse model output as JSON. Falling back to heuristic action: %s", decoded)
-            return [_fallback_action(prompt)]
+            return _fallback_actions(prompt)
 
     if not isinstance(parsed, (dict, list)):
         logger.warning("Model output was not a dict or list. Falling back to heuristic action: %s", parsed)
-        return [_fallback_action(prompt)]
+        return _fallback_actions(prompt)
 
     return parsed
 
