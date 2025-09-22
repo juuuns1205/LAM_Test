@@ -1,3 +1,4 @@
 /.env
 /trained_action_model/
 /checkpoints/
+/venv311/
